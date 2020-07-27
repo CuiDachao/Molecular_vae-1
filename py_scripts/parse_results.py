@@ -4,7 +4,7 @@ import numpy as np
 
 
 #-------------------------------------------------WHOLE-------------------------------------------------
-file = open("/hps/research1/icortes/acunha/python_scripts/vae_smiles_prism_zinc/loss_results.txt","r")
+file = open("/hps/research1/icortes/acunha/python_scripts/Molecular_vae/loss_results.txt","r")
 file = file.readlines()
 
 validation_loss_total = []
@@ -45,7 +45,7 @@ while i < len(file):
         i += 5
     
     else:
-        with open('/hps/research1/icortes/acunha/python_scripts/vae_smiles_prism_zinc/check_cases.txt', 'a') as f:
+        with open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/check_cases.txt', 'a') as f:
             parameters = file[i].split("put_")[-1].strip(".txt\n").split("_")
             f.write("_".join(parameters))
             f.write('\n')
@@ -72,9 +72,9 @@ best_parameters = d.head(20)
 print(best_parameters.head(20))
 print(list(best_parameters['Parameters'].head(20)))
 
-with open('/hps/research1/icortes/acunha/python_scripts/vae_smiles_prism_zinc/list_best_parameters.txt', 'w') as f:
+with open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/list_best_parameters.txt', 'w') as f:
     f.write('{}/{}'.format(list(best_parameters['Alpha'].head(1))[0],
-                           list(best_parameters['Parameters'].head(1))[0]))
+                           list(best_parameters['Parameters'].head(1))[0].strip('output_')))
     f.write('\n')
     f.write('{}/{}'.format(list(best_parameters['Alpha'].head(1))[0],
                            list(best_parameters['Parameters'].head(1))[0]))

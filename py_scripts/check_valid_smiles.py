@@ -22,7 +22,7 @@ from featurizer_SMILES import OneHotFeaturizer
 # -------------------------------------------------- FUNCTIONS --------------------------------------------------
 
 def create_report(filename, list_comments):
-    with open("/hps/research1/icortes/acunha/python_scripts/vae_smiles_prism_zinc/check_valid/{}".format(filename), 'a') as f:
+    with open("/hps/research1/icortes/acunha/python_scripts/Molecular_vae/check_valid/{}".format(filename), 'a') as f:
         f.write('\n'.join(list_comments))
     
 # --------------------------------------------------
@@ -192,7 +192,7 @@ class Molecular():
 
 molecules = Molecular()
 molecules.set_filename_report("molecular_output_50times.txt")
-path = "/hps/research1/icortes/acunha/python_scripts/vae_smiles_prism_zinc/results/0.00005/120_0.00001_64_2000_0.7_0.15_0_0.9_100_500"
+path = "/hps/research1/icortes/acunha/python_scripts/Molecular_vae/results/0.00005/120_0.00001_64_2000_0.7_0.15_0_0.9_100_500"
 mol_model = molecules.start_molecular(path)
 maximum_length_smiles = int(molecules.get_maximum_length())
 

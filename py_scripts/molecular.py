@@ -22,7 +22,7 @@ from featurizer_SMILES import OneHotFeaturizer
 # -------------------------------------------------- FUNCTIONS --------------------------------------------------
 
 def create_report(filename, list_comments):
-    with open("/hps/research1/icortes/acunha/python_scripts/vae_smiles_prism_zinc/results/{}".format(filename), 'a') as f:
+    with open("/hps/research1/icortes/acunha/python_scripts/Molecular_vae/results/{}".format(filename), 'a') as f:
         f.write('\n'.join(list_comments))
     
 # --------------------------------------------------
