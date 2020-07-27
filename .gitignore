@@ -1,0 +1,7 @@
+check_cases.txt
+check_valid/
+list_best_parameters.txt
+list_original_parameters_0.00005.txt
+list_original_parameters_1.0.txt
+loss_results.txt
+results/
