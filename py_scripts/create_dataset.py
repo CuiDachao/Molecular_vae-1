@@ -12,6 +12,11 @@ from sklearn.utils import shuffle
 
 from featurizer_SMILES import OneHotFeaturizer
 
+# -------------------------------------------------- DEFINE SEEDS --------------------------------------------------
+
+seed = 42
+np.random.seed(seed)
+
 # -------------------------------------------------- PROCESS DATASETS --------------------------------------------------
 
 prism_zinc = []

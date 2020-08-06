@@ -1,7 +1,10 @@
 import pandas as pd
 import numpy as np
 
+# -------------------------------------------------- DEFINE SEEDS --------------------------------------------------
 
+seed = 42
+np.random.seed(seed)
 
 #-------------------------------------------------WHOLE-------------------------------------------------
 file = open("/hps/research1/icortes/acunha/python_scripts/Molecular_vae/loss_results.txt","r")

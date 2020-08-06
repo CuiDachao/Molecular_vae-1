@@ -19,6 +19,12 @@ from rdkit import Chem
 from VAE_NN import Molecular_VAE
 from featurizer_SMILES import OneHotFeaturizer
 
+# -------------------------------------------------- DEFINE SEEDS --------------------------------------------------
+
+seed = 42
+np.random.seed(seed)
+torch.manual_seed(seed)
+
 # -------------------------------------------------- FUNCTIONS --------------------------------------------------
 
 def create_report(filename, list_comments):
@@ -98,6 +104,12 @@ class Molecular():
                 "Step size: {} ; Seed: {} ; Epoch to reset: {} ; Perc. of train: {}% ; Perc of validation: {}% ; Perc of test: {}% \n".format(self.step_size, self.seed, self.epoch_reset, int(self.perc_train*100), int(self.perc_val*100), int((100 - self.perc_train - self.perc_val)*100))]
         create_report(self.filename_report, lines)
 
+        global seed
+        if seed != self.seed:
+            seed = self.seed
+            np.random.seed(self.seed)
+            torch.manual_seed(self.seed)
+
     # --------------------------------------------------
 
     def load_datasets(self):
@@ -138,9 +150,6 @@ class Molecular():
 # --------------------------------------------------
 
     def initialize_model(self):
-        np.random.seed(self.seed)
-        torch.manual_seed(self.seed)
-        
         if torch.cuda.is_available():
             self.device = 'cuda'
         else:
