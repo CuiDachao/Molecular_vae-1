@@ -6,6 +6,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# -------------------------------------------------- DEFINE SEEDS --------------------------------------------------
+
+seed = 42
+torch.manual_seed(seed)
+
 # -------------------------------------------------- VARIATIONAL AUTOENCODER --------------------------------------------------
 
 class Molecular_VAE(nn.Module):

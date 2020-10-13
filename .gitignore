@@ -8,4 +8,5 @@ results/
 .idea
 new_results/
 data/
-
+hd
+py_scripts/__pycache__/

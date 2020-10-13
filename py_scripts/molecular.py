@@ -159,7 +159,7 @@ class Molecular():
     
     def __load_prism_chembl_zinc(self):
         
-        whole_dataset = pd.read_csv('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250.txt', usecols = ['index', 'Dataset'], index_col = 0)
+        whole_dataset = pd.read_csv('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250.txt', usecols = ['index', 'Dataset'], index_col = 0, nrows = 100)
         list_indexes = shuffle(list(whole_dataset.index))
         
         del whole_dataset
@@ -205,7 +205,6 @@ class Molecular():
             else:
                 data = values[0]
             indexes_dict[data]['Test'][self.test_indexes[i]] = i
-
         
         with open('pickle/Train_indexes.txt', 'w') as f:
             f.write('\n'.join(self.train_indexes))

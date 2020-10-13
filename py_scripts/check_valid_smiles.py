@@ -19,6 +19,12 @@ from rdkit import Chem
 from VAE_NN import Molecular_VAE
 from featurizer_SMILES import OneHotFeaturizer
 
+# -------------------------------------------------- DEFINE SEEDS --------------------------------------------------
+
+seed = 42
+np.random.seed(seed)
+torch.manual_seed(seed)
+
 # -------------------------------------------------- FUNCTIONS --------------------------------------------------
 
 def create_report(filename, list_comments):
@@ -88,12 +94,15 @@ class Molecular():
         self.__set_parameters(list_parameters)
         self.device = list_parameters[-1]
 
+        global seed
+        if seed != self.seed:
+            seed = self.seed
+            np.random.seed(self.seed)
+            torch.manual_seed(self.seed)
+
     # --------------------------------------------------
 
     def __initialize_model(self):
-        np.random.seed(self.seed)
-        torch.manual_seed(self.seed)
-
         model = Molecular_VAE(number_channels_in=self.maximum_length,
                               length_signal_in=len(self.ohf.get_charset()), dropout_prob = self.dropout)
         model.to(self.device)

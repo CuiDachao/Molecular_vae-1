@@ -7,6 +7,12 @@ import pandas as pd
 import pickle
 import torch
 
+# -------------------------------------------------- DEFINE SEEDS --------------------------------------------------
+
+seed = 42
+np.random.seed(seed)
+torch.manual_seed(seed)
+
 # -------------------------------------------------- ONE HOT ENCODING --------------------------------------------------
 
 class OneHotFeaturizer():

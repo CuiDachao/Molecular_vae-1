@@ -27,7 +27,7 @@ for alpha in "1.0" ; do # "0.00005" ; do
                                     mkdir -p "/hps/research1/icortes/acunha/python_scripts/Molecular_vae/new_results/alpha_${alpha}/${data_from}/${max_l}_${lr}_${size_batch}_${n_epoch}_${perc_train}_${perc_val}_${dropout}_${gam}_${step}_${seed}_${epoch_reset}_${type_lr}" && cd $_
                                     mkdir -p model_values plots pickle
                                 
-                                    bsub -g /$job_group -P gpu -gpu - -M 70G -e e_vae.log -o o_vae.log -J vae_smiles "python /hps/research1/icortes/acunha/python_scripts/Molecular_vae/py_scripts/molecular.py $alpha $data_from $max_l $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_lr $run_type"
+                                    bsub -g /$job_group -P gpu -gpu - -M 25G -e e_vae.log -o o_vae.log -J vae_smiles "python /hps/research1/icortes/acunha/python_scripts/Molecular_vae/py_scripts/molecular.py $alpha $data_from $max_l $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_lr $run_type"
                                 fi
                             done
                         done
