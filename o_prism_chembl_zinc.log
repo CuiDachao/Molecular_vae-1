@@ -1,0 +1,44 @@
+done!
+
+------------------------------------------------------------
+Sender: LSF System <lsf@gpu-011>
+Subject: Job 5511862: <data_smiles> in cluster <EBI> Done
+
+Job <data_smiles> was submitted from host <noah-login-02> by user <acunha> in cluster <EBI> at Mon Oct  5 21:55:30 2020
+Job was executed on host(s) <gpu-011>, in queue <research-rh74>, as user <acunha> in cluster <EBI> at Mon Oct  5 23:15:05 2020
+</homes/acunha> was used as the home directory.
+</hps/research1/icortes/acunha/python_scripts/Molecular_vae> was used as the working directory.
+Started at Mon Oct  5 23:15:05 2020
+Terminated at Tue Oct  6 01:18:22 2020
+Results reported at Tue Oct  6 01:18:22 2020
+
+Your job looked like:
+
+------------------------------------------------------------
+# LSBATCH: User input
+python py_scripts/process_dataset.py
+------------------------------------------------------------
+
+Successfully completed.
+
+Resource usage summary:
+
+    CPU time :                                   7328.29 sec.
+    Max Memory :                                 8097 MB
+    Average Memory :                             2270.40 MB
+    Total Requested Memory :                     20480.00 MB
+    Delta Memory :                               12383.00 MB
+    Max Swap :                                   9853 MB
+    Max Processes :                              3
+    Max Threads :                                4
+    Run time :                                   7395 sec.
+    Turnaround time :                            12172 sec.
+
+The output (if any) is above this job summary.
+
+
+
+PS:
+
+Read file <e_prism_chembl_zinc.log> for stderr output of this job.
+

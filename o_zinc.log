@@ -1,0 +1,43 @@
+
+------------------------------------------------------------
+Sender: LSF System <lsf@hx-noah-49-03>
+Subject: Job 705273: <proc_zinc> in cluster <EBI> Done
+
+Job <proc_zinc> was submitted from host <noah-login-02> by user <acunha> in cluster <EBI> at Fri Oct  2 19:55:40 2020
+Job was executed on host(s) <hx-noah-49-03>, in queue <research-rh74>, as user <acunha> in cluster <EBI> at Fri Oct  2 19:55:41 2020
+</homes/acunha> was used as the home directory.
+</hps/research1/icortes/acunha/python_scripts/Molecular_vae> was used as the working directory.
+Started at Fri Oct  2 19:55:41 2020
+Terminated at Fri Oct  2 19:55:43 2020
+Results reported at Fri Oct  2 19:55:43 2020
+
+Your job looked like:
+
+------------------------------------------------------------
+# LSBATCH: User input
+python /hps/research1/icortes/acunha/python_scripts/Molecular_vae/py_scripts/process_zinc.py
+------------------------------------------------------------
+
+Successfully completed.
+
+Resource usage summary:
+
+    CPU time :                                   0.57 sec.
+    Max Memory :                                 116 MB
+    Average Memory :                             116.00 MB
+    Total Requested Memory :                     40960.00 MB
+    Delta Memory :                               40844.00 MB
+    Max Swap :                                   1768 MB
+    Max Processes :                              3
+    Max Threads :                                4
+    Run time :                                   4 sec.
+    Turnaround time :                            3 sec.
+
+The output (if any) is above this job summary.
+
+
+
+PS:
+
+Read file <e_zinc.log> for stderr output of this job.
+

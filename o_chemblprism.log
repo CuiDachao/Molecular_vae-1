@@ -1,0 +1,44 @@
+[]
+
+------------------------------------------------------------
+Sender: LSF System <lsf@gpu-009>
+Subject: Job 327997: <proc_chemblprism> in cluster <EBI> Done
+
+Job <proc_chemblprism> was submitted from host <noah-login-02> by user <acunha> in cluster <EBI> at Wed Sep 30 09:49:11 2020
+Job was executed on host(s) <gpu-009>, in queue <research-rh74>, as user <acunha> in cluster <EBI> at Wed Sep 30 10:13:59 2020
+</homes/acunha> was used as the home directory.
+</hps/research1/icortes/acunha/python_scripts/Molecular_vae> was used as the working directory.
+Started at Wed Sep 30 10:13:59 2020
+Terminated at Wed Sep 30 10:16:48 2020
+Results reported at Wed Sep 30 10:16:48 2020
+
+Your job looked like:
+
+------------------------------------------------------------
+# LSBATCH: User input
+python /hps/research1/icortes/acunha/python_scripts/Molecular_vae/py_scripts/process_chemblprism.py
+------------------------------------------------------------
+
+Successfully completed.
+
+Resource usage summary:
+
+    CPU time :                                   153.89 sec.
+    Max Memory :                                 18472 MB
+    Average Memory :                             11591.86 MB
+    Total Requested Memory :                     40960.00 MB
+    Delta Memory :                               22488.00 MB
+    Max Swap :                                   20161 MB
+    Max Processes :                              3
+    Max Threads :                                4
+    Run time :                                   171 sec.
+    Turnaround time :                            1657 sec.
+
+The output (if any) is above this job summary.
+
+
+
+PS:
+
+Read file <e_chemblprism.log> for stderr output of this job.
+
