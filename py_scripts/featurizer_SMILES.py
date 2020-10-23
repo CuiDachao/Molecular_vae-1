@@ -33,20 +33,17 @@ class OneHotFeaturizer():
         
         one_hot_encoder_list = []
         for smile in smiles:
-            try:
-                X = {}
-                for i in range(maximum_length):
-                    X[i] = {j:0 for j in range(len(self.charset))}
-                for i in range(len(smile)):
-                    c_index = self.charset_index[smile[i]]
-                    X[i][c_index] = 1
-                if len(smile) < maximum_length:
-                    for i in range(len(smile), maximum_length):
-                        c_index = self.charset_index[' ']
-                        X[i][c_index] = 1
-                X = pd.DataFrame.from_dict(X, orient='index').to_numpy()
-            except KeyError:
-                X = float('NaN')
+            # try:
+            X = np.zeros((maximum_length, len(self.charset)))
+            for i in range(len(smile)):
+                c_index = self.charset_index[smile[i]]
+                X[i, c_index] = 1
+            if len(smile) < maximum_length:
+                for i in range(len(smile), maximum_length):
+                    c_index = self.charset_index[' ']
+                    X[i, c_index] = 1
+            # except KeyError:
+            #     X = float('NaN')
             one_hot_encoder_list.append(X)
         return one_hot_encoder_list
 

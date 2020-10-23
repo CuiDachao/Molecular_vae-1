@@ -1,5 +1,6 @@
 # -------------------------------------------------- IMPORTS --------------------------------------------------
 import pandas as pd
+import h5py
 import numpy as np
 import pickle
 from standardiser import standardise
@@ -11,10 +12,11 @@ from featurizer_SMILES import OneHotFeaturizer
 
 # -------------------------------------------------- RUN --------------------------------------------------
 
-def process_data(type_dataset, dataset):
+def process_data(type_dataset, dataset, i):
     new_ids = []
     fingerprints = []
     smiles = []
+    mol_oh = []
     
     n_smiles = 0
     for smile in dataset:
@@ -22,120 +24,115 @@ def process_data(type_dataset, dataset):
             mol = standardise.run(smile)
             if len(mol) <= 120:
                 fp = AllChem.GetMorganFingerprintAsBitVect(Chem.MolFromSmiles(mol), 2, nBits=1024)
-                new_ids.append('{}_{}'.format(type_dataset, n_smiles + 1))
-                fingerprints.append('[{}]'.format(','.join([str(x) for x in fp])))
-                smiles.append(mol)
-                n_smiles += 1
+                m_oh = ohf.featurize([mol], 120)
+                if str(m_oh) != 'nan':
+                    new_ids.append('{}_{}'.format(type_dataset, n_smiles + 1 + i))
+                    fingerprints.append('[{}]'.format(','.join([str(x) for x in fp])))
+                    smiles.append(mol)
+                    mol_oh.append(m_oh[0])
+                    n_smiles += 1
         except:
+            print('{} in {}'.format(smile, type_dataset))
             pass
     
-    with open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/READ_ME.txt', 'a') as f:
-        f.write('From {}: {} smiles\n'.format(type_dataset, n_smiles))
+    print(len(smiles))
     
-    return new_ids, fingerprints, smiles
+    return np.string_(new_ids), np.string_(fingerprints), np.string_(smiles), np.array(mol_oh), n_smiles + i
 
 # -------------------------------------------------- RUN --------------------------------------------------
 
-path_data = '/hps/research1/icortes/acunha/data'
+path_data = '/hps/research1/icortes/acunha/data/'
 ohf = OneHotFeaturizer()
 
-new_ids = []
-fingerprints = []
-smiles = []
-datasets = []
-
 with open('{}/ChEMBL_data/Chembl_250K_molecules.txt'.format(path_data), 'r') as f:
-    chembl_compounds = f.readlines()
-    chembl_compounds = [x.strip('\n') for x in chembl_compounds]
+    whole_dataset = f.readlines()
+    whole_dataset = [x.strip('\n') for x in whole_dataset]
+whole_dataset = list(set(whole_dataset))
+for i in range(0, len(whole_dataset), 500):
+    ids, fp, smi, mol_oh, n_smiles = process_data('chembl_compounds', whole_dataset[i:i+500], i)
+    datasets = np.string_(['chembl_compounds'] * ids.shape[0])
+    d = {'index': ids, 'morgan_fingerprints': fp, 'smiles': smi, 'one_hot_matrices': mol_oh, 'datasets': datasets}
+    if i == 0:
+        with h5py.File('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250.hdf5', 'w') as f:
+            f.create_dataset('index', data = ids, compression="gzip", chunks=True, maxshape=(None,))
+            f.create_dataset('morgan_fingerprints', data = fp, compression="gzip", chunks=True, maxshape=(None,))
+            f.create_dataset('smiles', data = smi, compression="gzip", chunks=True, maxshape=(None,))
+            f.create_dataset('one_hot_matrices', data = mol_oh, compression="gzip", chunks=True, maxshape=(None,None,None))
+            f.create_dataset('datasets', data = datasets, compression="gzip", chunks=True, maxshape=(None,))
+    else:
+        with h5py.File('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250.hdf5', 'a') as f:
+            for k in d.keys():
+                array = d[k]
+                print(f[k].shape[0] + array.shape[0])
+                f[k].resize((f[k].shape[0] + array.shape[0]), axis = 0)
+                f[k][-array.shape[0]:] = array
+    print('chembl_compounds, ', i)
 
-ids, fp, smi = process_data('chembl_compounds', chembl_compounds)
-# res_oh = {}
-# for i in range(len(smi)):
-#     whole_dataset_oh = ohf.featurize(smi, 120)
-#     for j in range(len(whole_dataset_oh)):
-#         if str(whole_dataset_oh[j]) != 'nan':
-#             res_oh[ids[j]] = whole_dataset_oh[j]
-# pickle.dump(res_oh, open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250_onehot::chembl_compounds.pkl', 'wb'))
-new_ids.extend(ids)
-fingerprints.extend(fp)
-smiles.extend(smi)
-datasets.extend(['chembl_compounds' for _ in range(len(smi))])
+with open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/READ_ME.txt', 'a') as f:
+    f.write('From chembl_compounds: {} smiles\n'.format(n_smiles))
 
-# to_delete = [whole_dataset_oh, chembl_compounds, new_ids, fp, smi]
-# for item in to_delete:
-#     del item
-# gc.collect()
+whole_dataset = pd.read_csv('{}/ChEMBL_approved_drugs/Chembl_approved_drugs.csv'.format(path_data), header = 0, index_col = 0)
+whole_dataset = list(set(whole_dataset['smiles']))
+for i in range(0, len(whole_dataset), 500):
+    ids, fp, smi, mol_oh, n_smiles = process_data('chembl_approved_drugs', whole_dataset[i:i+500], i)
+    datasets = np.string_(['chembl_approved_drugs'] * ids.shape[0])
+    d = {'index': ids, 'morgan_fingerprints': fp, 'smiles': smi, 'one_hot_matrices': mol_oh, 'datasets': datasets}
+    with h5py.File('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250.hdf5', 'a') as f:
+        for k in d.keys():
+            array = d[k]
+            f[k].resize((f[k].shape[0] + array.shape[0]), axis = 0)
+            f[k][-array.shape[0]:] = array
+    print('chembl_approved_drugs, ', i)
 
-chembl_approved_drugs = pd.read_csv('{}/ChEMBL_approved_drugs/Chembl_approved_drugs.csv'.format(path_data), header = 0, index_col = 0)
-chembl_approved_drugs = list(chembl_approved_drugs['smiles'])
-ids, fp, smi = process_data('chembl_approved_drugs', chembl_approved_drugs)
-# res_oh = {}
-# for i in range(len(smi)):
-#     whole_dataset_oh = ohf.featurize(smi, 120)
-#     for j in range(len(whole_dataset_oh)):
-#         if str(whole_dataset_oh[j]) != 'nan':
-#             res_oh[ids[j]] = whole_dataset_oh[j]
-# pickle.dump(res_oh, open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250_onehot::chembl_approved_drugs.pkl', 'wb'))
-new_ids.extend(ids)
-fingerprints.extend(fp)
-smiles.extend(smi)
-datasets.extend(['chembl_approved_drugs' for _ in range(len(smi))])
-# 
-# to_delete = [whole_dataset_oh, chembl_approved_drugs, new_ids, fp, smi]
-# for item in to_delete:
-#     del item
-# gc.collect()
+with open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/READ_ME.txt', 'a') as f:
+    f.write('From chembl_approved_drugs: {} smiles\n'.format(n_smiles))
 
 with open('{}/PRISM_every_compound/Prism_all.txt'.format(path_data), 'r') as f:
-    prism = f.readlines()
-    prism = [x.strip('\n') for x in prism]
-ids, fp, smi = process_data('prism', prism)
-# res_oh = {}
-# for i in range(len(smi)):
-#     whole_dataset_oh = ohf.featurize(smi, 120)
-#     for j in range(len(whole_dataset_oh)):
-#         if str(whole_dataset_oh[j]) != 'nan':
-#             res_oh[ids[j]] = whole_dataset_oh[j]
-# pickle.dump(res_oh, open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250_onehot::prism.pkl', 'wb'))
-new_ids.extend(ids)
-fingerprints.extend(fp)
-smiles.extend(smi)
-datasets.extend(['prism' for _ in range(len(smi))])
+    whole_dataset = f.readlines()
+    whole_dataset = [x.strip('\n') for x in whole_dataset]
+whole_dataset = list(set(whole_dataset))
+for i in range(0, len(whole_dataset), 500):
+    ids, fp, smi, mol_oh, n_smiles = process_data('prism', whole_dataset[i:i+500], i)
+    print(ids.shape[0])
+    datasets = np.string_(['prism'] * ids.shape[0])
+    d = {'index': ids, 'morgan_fingerprints': fp, 'smiles': smi, 'one_hot_matrices': mol_oh, 'datasets': datasets}
+    with h5py.File('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250.hdf5', 'a') as f:
+        for k in d.keys():
+            array = d[k]
+            f[k].resize((f[k].shape[0] + array.shape[0]), axis = 0)
+            f[k][-array.shape[0]:] = array
+    print('prism, ', i)
 
-# to_delete = [whole_dataset_oh, prism, new_ids, fp, smi]
-# for item in to_delete:
-#     del item
-# gc.collect()
+with open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/READ_ME.txt', 'a') as f:
+    f.write('From prism: {} smiles\n'.format(n_smiles))
     
 with open('{}/ZINC/250k_rndm_zinc_drugs_clean.smi'.format(path_data), 'r') as f:
-    zinc = f.readlines()
-    zinc = [x.strip('\n') for x in zinc]
-ids, fp, smi = process_data('zinc', zinc)
-# res_oh = {}
-# for i in range(len(smi)):
-#     whole_dataset_oh = ohf.featurize(smi, 120)
-#     for j in range(len(whole_dataset_oh)):
-#         if str(whole_dataset_oh[j]) != 'nan':
-#             res_oh[ids[j]] = whole_dataset_oh[j]
-# pickle.dump(res_oh, open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250_onehot::zinc.pkl', 'wb'))
-new_ids.extend(ids)
-fingerprints.extend(fp)
-smiles.extend(smi)
-datasets.extend(['zinc' for _ in range(len(smi))])
+    whole_dataset = f.readlines()
+    whole_dataset = [x.strip('\n') for x in whole_dataset]
+whole_dataset = list(set(whole_dataset))
+for i in range(0, len(whole_dataset), 500):
+    ids, fp, smi, mol_oh, n_smiles = process_data('zinc', whole_dataset[i:i+500], i)
+    datasets = np.string_(['zinc'] * ids.shape[0])
+    d = {'index': ids, 'morgan_fingerprints': fp, 'smiles': smi, 'one_hot_matrices': mol_oh, 'datasets': datasets}
+    with h5py.File('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250.hdf5', 'a') as f:
+        for k in d.keys():
+            array = d[k]
+            f[k].resize((f[k].shape[0] + array.shape[0]), axis = 0)
+            f[k][-array.shape[0]:] = array
+    print('zinc, ', i)
 
-# to_delete = [whole_dataset_oh, zinc]
-# for item in to_delete:
-#     del item
-# gc.collect()
+with open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/READ_ME.txt', 'a') as f:
+    f.write('From zinc: {} smiles\n'.format(n_smiles))
 
-res = pd.DataFrame(new_ids, columns = ['index'])
-res['Morgan_Fingerprint'] = fingerprints
-res['Smile'] = smiles
-res['Dataset'] = datasets
-res.to_csv('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250.txt',
-                         header=True, index=False)
-pickle.dump(res, open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250.pkl', 'wb'))
-res['Smile'].to_csv('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250_Smile.txt',
-                         header=False, index=False)
+with open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250.txt', 'w') as f:
+    f.write('index,Morgan_Fingerprint,Smile\n')
+    with h5py.File('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250.hdf5', 'r') as file:
+        d1 = file['index']
+        d2 = file['morgan_fingerprints']
+        d3 = file['smiles']
+        d4 = file['datasets']
+        for i in range(len(d1)):
+            f.write('{},{},{},{}\n'.format(np.char.decode(d1[i]).tolist(), np.char.decode(d2[i]).tolist(),
+                                           np.char.decode(d3[i]).tolist(), np.char.decode(d4[i]).tolist()))
 
 print('done!')

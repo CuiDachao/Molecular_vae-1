@@ -17,6 +17,8 @@ import gc
 from rdkit import Chem
 import datetime
 import os
+import h5py
+import random
 
 from VAE_NN import Molecular_VAE
 from featurizer_SMILES import OneHotFeaturizer
@@ -52,6 +54,7 @@ class Molecular():
 
         self.perc_train = None
         self.perc_val = None
+        self.run_percentage = None
         
         self.type_lr = None
         
@@ -85,10 +88,11 @@ class Molecular():
         self.seed = int(list_parameters[11])
         self.epoch_reset = int(list_parameters[12])
         self.type_lr = list_parameters[13]
-        self.run_type = list_parameters[14]
+        self.run_percentage = float(list_parameters[14])
+        self.run_type = list_parameters[15]
         
         if self.run_type == 'resume':
-            self.n_epochs += int(list_parameters[15])
+            self.n_epochs += int(list_parameters[16])
         
         if self.type_lr == 'non_cyclical':
             self.epoch_reset = self.n_epochs
@@ -104,7 +108,7 @@ class Molecular():
         
         #add information to report
         if self.run_type == 'resume':
-            lines = ['\n', '*** RESUME FOR MORE {} EPOCHS *** \n'.format(list_parameters[15])]
+            lines = ['\n', '*** RESUME FOR MORE {} EPOCHS *** \n'.format(list_parameters[16])]
         else:
             lines = ['** REPORT - MOLECULAR **\n',
                     '* Parameters',
@@ -131,9 +135,9 @@ class Molecular():
             # train_set, validation_set, test_set = self.__load_zinc()
             pass
         elif self.data_from == 'prism_chembl_zinc':
-            train_set, validation_set, test_set, indexes_dict = self.__load_prism_chembl_zinc()
+            dataset = self.__load_prism_chembl_zinc()
         
-        return train_set, validation_set, test_set, indexes_dict
+        return dataset
     
     # --------------------------------------------------
     
@@ -159,59 +163,23 @@ class Molecular():
     
     def __load_prism_chembl_zinc(self):
         
-        whole_dataset = pd.read_csv('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250.txt', usecols = ['index', 'Dataset'], index_col = 0, nrows = 100)
-        list_indexes = shuffle(list(whole_dataset.index))
+        dataset = h5py.File('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250.hdf5', 'r')
+        list_indexes = dataset['index']
         
-        del whole_dataset
-        gc.collect()
+        validation_number = int(self.perc_val * list_indexes.shape[0])
+        train_number = int(self.perc_train * list_indexes.shape[0])
         
-        indexes_dict = {x:{'Train':{}, 'Validation':{}, 'Test':{}} for x in ['chembl_compounds', 'chembl_approved_drugs', 'prism', 'zinc']}
-        
-        validation_number = int(self.perc_val * len(list_indexes))
-        train_number = int(self.perc_train * len(list_indexes))
-        
-        self.train_indexes = list_indexes[:train_number]
-        for i in range(len(self.train_indexes)):
-            values = self.train_indexes[i].split('_')
-            if values[0] == 'chembl':
-                if values[1] == 'compounds':
-                    data = '_'.join(values[:2])
-                else:
-                    data = '_'.join(values[:3])
-            else:
-                data = values[0]
-            indexes_dict[data]['Train'][self.train_indexes[i]] = i
-        
-        self.validation_indexes = list_indexes[train_number:int(train_number + validation_number)]
-        for i in range(len(self.validation_indexes)):
-            values = self.train_indexes[i].split('_')
-            if values[0] == 'chembl':
-                if values[1] == 'compounds':
-                    data = '_'.join(values[:2])
-                else:
-                    data = '_'.join(values[:3])
-            else:
-                data = values[0]
-            indexes_dict[data]['Validation'][self.validation_indexes[i]] = i
-            
-        self.test_indexes = list_indexes[int(train_number + validation_number):]
-        for i in range(len(self.test_indexes)):
-            values = self.train_indexes[i].split('_')
-            if values[0] == 'chembl':
-                if values[1] == 'compounds':
-                    data = '_'.join(values[:2])
-                else:
-                    data = '_'.join(values[:3])
-            else:
-                data = values[0]
-            indexes_dict[data]['Test'][self.test_indexes[i]] = i
+        self.train_indexes, self.validation_indexes, self.test_indexes = np.split(shuffle(np.arange(list_indexes.shape[0])), [train_number, validation_number + train_number])
         
         with open('pickle/Train_indexes.txt', 'w') as f:
-            f.write('\n'.join(self.train_indexes))
+            for i in self.train_indexes:
+                f.write('{}\n'.format(np.char.decode(list_indexes[i]).tolist()))
         with open('pickle/Validation_indexes.txt', 'w') as f:
-            f.write('\n'.join(self.validation_indexes))
+            for i in self.validation_indexes:
+                f.write('{}\n'.format(np.char.decode(list_indexes[i]).tolist()))
         with open('pickle/Test_indexes.txt', 'w') as f:
-            f.write('\n'.join(self.test_indexes))
+            for i in self.test_indexes:
+                f.write('{}\n'.format(np.char.decode(list_indexes[i]).tolist()))
         
         lines = ['\n*Datasets',
              'Training set: {}'.format(len(self.train_indexes)),
@@ -219,7 +187,7 @@ class Molecular():
              'Test set: {} \n'.format(len(self.test_indexes))]
         create_report(self.filename_report, lines)
         
-        return self.train_indexes, self.validation_indexes, self.test_indexes, indexes_dict
+        return dataset
     
     # --------------------------------------------------
 
@@ -238,7 +206,13 @@ class Molecular():
 
     # --------------------------------------------------
 
-    def __train_validation(self, model, train_loader, validation_loader):
+    def __train_validation(self, model, dataset):
+        seeds = []
+        while len(seeds) < self.n_epochs:
+            x = random.randint(0,100000)
+            if x not in seeds:
+                seeds.append(x)
+        
         if self.run_type == 'start':
             n_epochs_not_getting_better = 0
             best_epoch = None
@@ -272,10 +246,15 @@ class Molecular():
         optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
         best_model = copy.deepcopy(model.state_dict())  # save the best model yet with the best accuracy and lower loss value
         decay_learning_rate = lr_scheduler.StepLR(optimizer, step_size=self.step_size, gamma=self.gamma)
-        epoch_stop = 80
+        epoch_stop = 100
 
         # Training and Validation
         for epoch in range(self.n_epochs):
+            if epoch > 0:
+                seed = seeds[epoch-1]
+            else:
+                seed = 0
+            
             if (epoch + 1) % self.epoch_reset == 0 and epoch != (self.n_epochs - 1):
                 print('-' * 10)
                 print('Epoch: {} of {}'.format(epoch+1, self.n_epochs))
@@ -288,7 +267,7 @@ class Molecular():
 
             # TRAINING
             start_train_time = time.time()
-            train_loss_epoch, train_reconstruction_loss_epoch, train_kl_loss_epoch = self.__train__(model, optimizer, train_loader)
+            train_loss_epoch, train_reconstruction_loss_epoch, train_kl_loss_epoch = self.__train__(model, optimizer, dataset, seed, epoch)
             end_train_model = time.time()
             results['total_loss_values_training'][epoch] = train_loss_epoch
             results['reconstruction_loss_values_training'][epoch] = train_reconstruction_loss_epoch
@@ -297,7 +276,7 @@ class Molecular():
 
             # VALIDATION
             start_validation_time = time.time()
-            validation_loss_epoch, validation_reconstruction_loss_epoch, validation_kl_loss_epoch = self.__eval_mode__(model, validation_loader, 'Validation', save = False)
+            validation_loss_epoch, validation_reconstruction_loss_epoch, validation_kl_loss_epoch = self.__eval_mode__(model, dataset, 'Validation', seed, epoch, save = False)
             end_validation_time = time.time()
             results['total_loss_values_validation'][epoch] = validation_loss_epoch
             results['reconstruction_loss_values_validation'][epoch] = validation_reconstruction_loss_epoch
@@ -354,13 +333,24 @@ class Molecular():
 
     # --------------------------------------------------
     
-    def __train__(self, model, optimizer, train_loader):
+    def __train__(self, model, optimizer, dataset, seed, epoch):
+        
+        if epoch > 0:
+            self.set_seed(seed)
+        
+        indexes = np.random.choice(self.train_indexes, int(len(self.train_indexes) * self.run_percentage), False)
+
+        if epoch > 0:
+            self.set_seed(self.seed)
+        
         model.train()  # set model for training
         train_loss_epoch = 0.0
         train_reconstruction_loss_epoch = 0.0
         train_kl_loss_epoch = 0.0
-        for train_batch in train_loader:
-            train_batch = train_batch.to(self.device)
+        batches = 0
+        for i in range(0, len(indexes), self.size_batch):
+            indexes_batch = indexes[i:i+self.size_batch]
+            train_batch = self.__get_batch__(indexes_batch, dataset).to(self.device)
             optimizer.zero_grad()  # set the gradients of all parameters to zero
             train_predictions = model(train_batch)  # output predicted by the model
             train_current_loss = self.__loss_function(train_batch, train_predictions[0], train_predictions[2], train_predictions[3])
@@ -370,38 +360,64 @@ class Molecular():
             train_loss_epoch += train_current_loss[0].item()
             train_reconstruction_loss_epoch += train_current_loss[1].item()
             train_kl_loss_epoch += train_current_loss[2].item()
+            batches += 1
 
-        train_loss_epoch = train_loss_epoch / len(train_loader)
-        train_reconstruction_loss_epoch = train_reconstruction_loss_epoch / len(train_loader)
-        train_kl_loss_epoch = train_kl_loss_epoch / len(train_loader)
+        train_loss_epoch = train_loss_epoch / batches
+        train_reconstruction_loss_epoch = train_reconstruction_loss_epoch / batches
+        train_kl_loss_epoch = train_kl_loss_epoch / batches
         
         return train_loss_epoch, train_reconstruction_loss_epoch, train_kl_loss_epoch
     
     # --------------------------------------------------
     
-    def __eval_mode__(self, model, data_loader, type_dataset, save = True):
+    def __eval_mode__(self, model, dataset, type_dataset, seed = 0, epoch = 0, save = True):
+        if type_dataset == 'Train':
+            indexes = self.train_indexes
+        elif type_dataset == 'Validation':
+            indexes = self.validation_indexes
+        else:
+            indexes = self.test_indexes
+        
+        if not save:
+            if epoch > 0:
+                self.set_seed(seed)
+            indexes = np.random.choice(indexes, int(len(indexes) * self.run_percentage), False)
+            if epoch > 0:
+                self.set_seed(self.seed)
+        
         model.eval()
         loss_epoch = 0.0
         reconstruction_loss_epoch = 0.0
         kl_loss_epoch = 0.0
-        predictions_complete, bottleneck_complete = [], []
+        batches = 0
         with torch.no_grad():
-            for batch in data_loader:
-                batch = batch.to(self.device)
+            for i in range(0, len(indexes), self.size_batch):
+                batch_indexes = indexes[i:i+self.size_batch]
+                batch = self.__get_batch__(batch_indexes, dataset).to(self.device)
                 predictions = model(batch)  # output predicted by the model
                 current_loss = self.__loss_function(batch, predictions[0], predictions[2], predictions[3])
                 loss_epoch += current_loss[0].item()
                 reconstruction_loss_epoch += current_loss[1].item()
                 kl_loss_epoch += current_loss[2].item()
                 if save:
-                    predictions_complete.extend(predictions[0].cpu().numpy().tolist())
-                    bottleneck_complete.extend(predictions[1].cpu().numpy().tolist())
-        loss_epoch = loss_epoch / len(data_loader)
-        reconstruction_loss_epoch = reconstruction_loss_epoch / len(data_loader)
-        kl_loss_epoch = kl_loss_epoch / len(data_loader)
+                    if i == 0:
+                        with h5py.File('pickle/{}_outputs.pkl'.format(type_dataset), 'w') as f:
+                            f.create_dataset('predictions_complete', data = predictions[0].cpu().numpy(), compression="gzip", chunks=True, maxshape=(None,None, None))
+                        with open('pickle/{}_bottlenecks.pkl'.format(type_dataset), 'w') as f:
+                            f.write('\n'.join([str(x) for x in predictions[1].cpu().numpy().tolist()]))
+                    else:
+                        with h5py.File('pickle/{}_outputs.pkl'.format(type_dataset), 'a') as f:
+                            array = predictions[0].cpu().numpy()
+                            f['predictions_complete'].resize((f['predictions_complete'].shape[0] + array.shape[0]), axis = 0)
+                            f['predictions_complete'][-array.shape[0]:] = array
+                        with open('pickle/{}_bottlenecks.pkl'.format(type_dataset), 'a') as f:
+                            f.write('\n')
+                            f.write('\n'.join([str(x) for x in predictions[1].cpu().numpy().tolist()]))
+                batches += 1
         
-        if save:
-            pickle.dump([predictions_complete, bottleneck_complete], open('pickle/{}_outputs_bottlenecks.pkl'.format(type_dataset), 'wb'))
+        loss_epoch = loss_epoch / batches
+        reconstruction_loss_epoch = reconstruction_loss_epoch / batches
+        kl_loss_epoch = kl_loss_epoch / batches
         
         return loss_epoch, reconstruction_loss_epoch, kl_loss_epoch
 
@@ -411,20 +427,22 @@ class Molecular():
         reconstruction_loss = F.binary_cross_entropy(x_output, x_input, size_average=False)
         kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu.pow(2) - 1.0 - z_var)
         return reconstruction_loss + (self.alpha * kl_loss), reconstruction_loss, kl_loss
+    
+    # --------------------------------------------------
+    
+    def __get_batch__(self, indexes_batches, dataset):            
+        return torch.Tensor(data = dataset['one_hot_matrices'][sorted(indexes_batches)]).type('torch.FloatTensor')
 
     # --------------------------------------------------
 
-    def train_model(self, model, train_set, validation_set):
+    def train_model(self, model, dataset):
         start_training = time.time()
-        train_loader = [torch.tensor(train_set[i:i+self.size_batch]).type('torch.FloatTensor') for i in range(0, len(train_set), self.size_batch)]
-        validation_loader = [torch.tensor(validation_set[i:i+self.size_batch]).type('torch.FloatTensor') for i in range(0, len(validation_set), self.size_batch)]
-
-        model = self.__train_validation(model, train_loader, validation_loader)
+        model = self.__train_validation(model, dataset)
         end_training = time.time()
         create_report(self.filename_report, ['Duration: {:.2f} \n'.format(end_training - start_training)])
         
-        _, _, _ = self.__eval_mode__(model, train_loader, 'Train')
-        _, _, _ = self.__eval_mode__(model, validation_loader, 'Validation')
+        _, _, _ = self.__eval_mode__(model, dataset, 'Train')
+        _, _, _ = self.__eval_mode__(model, dataset, 'Validation')
         
         
         self.__save_model(model)
@@ -450,26 +468,23 @@ class Molecular():
         pickle.dump(
             [np.format_float_positional(self.alpha), self.data_from, self.maximum_length, np.format_float_positional(self.learning_rate),
              self.size_batch, self.n_epochs, self.perc_train, self.perc_val, self.dropout, self.gamma,
-             self.step_size, self.seed, self.epoch_reset], open('pickle/list_initial_parameters_smiles.pkl', 'wb'))
+             self.step_size, self.seed, self.epoch_reset, self.type_lr, self.run_percentage], open('pickle/list_initial_parameters_smiles.pkl', 'wb'))
     
     # --------------------------------------------------
 
-    def run_test_set(self, model, test_set):
-        test_loader = [torch.tensor(test_set[i:i+self.size_batch]).type('torch.FloatTensor') for i in range(0, len(test_set), self.size_batch)]
-        test_loss, test_reconstruction_loss, test_kl_loss = self.__eval_mode__(model, test_loader, 'Test')
-        
-        del test_loader
-        gc.collect()
+    def run_test_set(self, model, dataset):
+        test_loss, test_reconstruction_loss, test_kl_loss = self.__eval_mode__(model, dataset, 'Test')
 
         create_report(self.filename_report, ['Testing :: Total loss: {:.2f} ; Reconstruction loss: {:.2f} ; KL loss: {:.2f}'.format(test_loss, test_reconstruction_loss, test_kl_loss)])
 
     # --------------------------------------------------
     
-    def count_valid(self, type_dataset):
-        whole_dataset = pd.read_csv('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/prism_chembl250_chembldrugs_zinc250.txt', usecols = ['index', 'Smile'], index_col = 0)
+    def count_valid(self, type_dataset, dataset):
+        output = h5py.File('pickle/{}_outputs.pkl'.format(type_dataset), 'r')
 
         valid = 0
         same = 0
+        total = 0
         
         if type_dataset == 'Train':
             indexes = self.train_indexes
@@ -478,15 +493,10 @@ class Molecular():
         else:
             indexes = self.test_indexes
         
-        smiles_i = list(whole_dataset['Smile'].loc[indexes])
-        
-        onehot_o = pickle.load(open('pickle/{}_outputs_bottlenecks.pkl'.format(type_dataset), 'rb'))
-        smiles_o = self.ohf.back_to_smile(onehot_o[0])
-        
         with open('{}_smiles_predictions.txt'.format(type_dataset), 'w') as f:
-            for i in range(len(smiles_i)):
-                s_i = smiles_i[i]
-                s_o = smiles_o[i]
+            for i in range(len(indexes)):
+                s_i = np.char.decode(dataset['smiles'][indexes[i]]).tolist()
+                s_o = self.ohf.back_to_smile([output['predictions_complete'][i]])[0]
                 m = Chem.MolFromSmiles(s_o)
                 if m is not None:
                     valid += 1
@@ -494,8 +504,9 @@ class Molecular():
                     same += 1
                 f.write('\n'.join(['Input: {}'.format(s_i), 'Output: {}'.format(s_o), '\n']))
                 f.write('\n')
+                total += 1
         
-        create_report(self.filename_report, ['\n', 'For {}_set: '.format(type_dataset), 'Valid molecules: {:.2f}%'.format((valid/len(smiles_i)) * 100),
+        create_report(self.filename_report, ['\n', 'For {}_set: '.format(type_dataset), 'Valid molecules: {:.2f}%'.format((valid/total) * 100),
                                              'Same as input: {}'.format(same)])
         
     # --------------------------------------------------
@@ -520,10 +531,10 @@ class Molecular():
     # --------------------------------------------------
 
     def create_filename(self, list_parameters):
-        filename_output = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(list_parameters[2], list_parameters[3], list_parameters[4],
+        filename_output = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(list_parameters[2], list_parameters[3], list_parameters[4],
                                                                  list_parameters[5], list_parameters[6], list_parameters[7],
                                                                  list_parameters[8], list_parameters[9], list_parameters[10],
-                                                                 list_parameters[11], list_parameters[12], list_parameters[13])
+                                                                 list_parameters[11], list_parameters[12], list_parameters[13], list_parameters[14])
         self.filename_report = 'alpha_{}/{}/output_{}.txt'.format(list_parameters[0], list_parameters[1], filename_output)
         return self.filename_report
 
@@ -544,63 +555,17 @@ def run_molecular(list_parameters, run_type):
     
     molecular.set_parameters(list_parameters)
     
-    train_set_indexes, validation_set_indexes, test_set_indexes, indexes_dict = molecular.load_datasets() 
-    
-    datasets_from = ['chembl_compounds', 'chembl_approved_drugs', 'prism', 'zinc']
-    onehot_dict = {x:{} for x in ['Train', 'Validation', 'Test']}
-    for data in datasets_from:
-        path = '/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/onehot_{}'.format(data, data) 
-        files = os.listdir(path)
-        for file in files:
-            whole_dataset_onehot = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/onehot_{}/{}'.format(data, file), 'rb'))
-            onehot_indexes = list(whole_dataset_onehot.keys())
-            
-            train_i = list(set(onehot_indexes).intersection(list(indexes_dict[data]['Train'].keys())))
-            validation_i = list(set(onehot_indexes).intersection(list(indexes_dict[data]['Validation'].keys())))
-            test_i = list(set(onehot_indexes).intersection(list(indexes_dict[data]['Test'].keys())))
-            
-            for index in train_i:
-                i = indexes_dict[data]['Train'][index]
-                onehot_dict['Train'][i] = whole_dataset_onehot[index]
-            
-            for index in validation_i:
-                i = indexes_dict[data]['Validation'][index]
-                onehot_dict['Validation'][i] = whole_dataset_onehot[index]
-            
-            for index in test_i:
-                i = indexes_dict[data]['Test'][index]
-                onehot_dict['Test'][i] = whole_dataset_onehot[index]
-    
-    train_set = []
-    validation_set = []
-    test_set = []
-    for k in sorted(onehot_dict['Train'].keys()):
-        train_set.append(onehot_dict['Train'][k])
-    for k in sorted(onehot_dict['Validation'].keys()):
-        validation_set.append(onehot_dict['Validation'][k])
-    for k in sorted(onehot_dict['Test'].keys()):
-        test_set.append(onehot_dict['Test'][k])
-    
-    del onehot_dict
-    gc.collect()
+    dataset = molecular.load_datasets()
     
     model = molecular.initialize_model()
-    model_trained = molecular.train_model(model, train_set, validation_set)
-    
-    free_memory = [train_set, validation_set]
-    for item in free_memory:
-        del item
-    gc.collect()
+    model_trained = molecular.train_model(model, dataset)
         
-    molecular.run_test_set(model_trained, test_set)
-    
-    del test_set
-    gc.collect()
+    molecular.run_test_set(model_trained, dataset)
     
     #count the valid smiles predictions
     type_dataset = ['Train', 'Validation', 'Test']
     for type_d in type_dataset:
-        molecular.count_valid(type_d)
+        molecular.count_valid(type_d, dataset)
     
     #plots
     results = pd.read_csv('Training_Validation_results.txt', header = 0, index_col = 0)

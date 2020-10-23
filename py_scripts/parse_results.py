@@ -8,8 +8,13 @@ np.random.seed(seed)
 
 #-------------------------------------------------WHOLE-------------------------------------------------
 file = open("/hps/research1/icortes/acunha/python_scripts/Molecular_vae/loss_results.txt","r")
-file = file.readlines()
+import pandas as pd
+import numpy as np
 
+seed = 42
+np.random.seed(seed)
+
+check = []
 validation_loss_total = []
 validation_loss_recon = []
 validation_loss_kl= []
@@ -20,39 +25,65 @@ train_loss_total = []
 train_loss_recon = []
 train_loss_kl = []
 loss_params = []
-valid = []
-alpha = []
 
-i = 0
-while i < len(file):
-    if "Training" in file[i] and "Validation" in file[i+1] and "Testing" in file[i+2]:
-        train_line = file[i].strip("\n").split(' ; ')
-        validation_line = file[i+1].strip("\n").split(' ; ')
-        test_line = file[i+2].strip("\n").split(' ; ')
-        parameters = file[i+4].strip(".txt\n").split("/")
-        valid_line = file[i+3].strip('%\n').split(': ')
+
+files = open('loss_results.txt', 'r')
+files = files.readlines()
+
+for file in files:
+    values = open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/{}'.format(file.strip('\n')), 'r')
+    values = values.readlines()
+    try:
+        line_train = values[12].strip('\n').split(' :: ')
+        line_val = values[13].strip('\n').split(' :: ')
+        line_epochs = values[14].strip(' \n').split(': ')
+        line_test = values[16].strip('\n').split(' :: ')
         
-        validation_loss_total.append(float(validation_line[0].split(':')[-1]))
-        validation_loss_recon.append(float(validation_line[1].split(':')[-1]))
-        validation_loss_kl.append(float(validation_line[2].split(':')[-1]))
-        train_loss_total.append(float(train_line[0].split(':')[-1]))
-        train_loss_recon.append(float(train_line[1].split(':')[-1]))
-        train_loss_kl.append(float(train_line[2].split(':')[-1]))
-        test_loss_total.append(float(test_line[0].split(':')[-1]))
-        test_loss_recon.append(float(test_line[1].split(':')[-1]))
-        test_loss_kl.append(float(test_line[2].split(':')[-1]))
-        loss_params.append(parameters[-1])
-        alpha.append(parameters[1])
-        valid.append(float(valid_line[-1]))
+        assert line_train[0] == 'Training'
+        line_train = line_train[1].split(' ; ')
+        training_loss = float(line_train[0].split(': ')[1])
+        train_recon_loss = float(line_train[1].split(': ')[1])
+        train_kl_loss = float(line_train[2].split(': ')[1])
         
-        i += 5
+        assert line_epochs[0] == 'Number of epochs'
+        epoch_stop, epoch_final = line_epochs[1].split(' of ')
+        if epoch_stop != epoch_final:
+            with open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/stopped_early.txt', 'a') as f:
+                f.write(file)
+        
+        assert line_val[0] == 'Validation'
+        line_val = line_val[1].split(' ; ')
+        val_loss = float(line_val[0].split(': ')[1])
+        val_recon_loss = float(line_val[1].split(': ')[1])
+        val_kl_loss = float(line_val[2].split(': ')[1])
+        
+        assert line_test[0] == 'Testing'
+        line_test = line_test[1].split(' ; ')
+        test_loss = float(line_test[0].split(': ')[1])
+        test_recon_loss = float(line_test[1].split(': ')[1])
+        test_kl_loss = float(line_test[2].split(': ')[1])
+        
+        
+        validation_loss_total.append(val_loss)
+        validation_loss_recon.append(val_recon_loss)
+        validation_loss_kl.append(val_kl_loss)
+        
+        train_loss_total.append(training_loss)
+        train_loss_recon.append(train_recon_loss)
+        train_loss_kl.append(train_kl_loss)
+        
+        test_loss_total.append(test_loss)
+        test_loss_recon.append(test_recon_loss)
+        test_loss_kl.append(test_kl_loss)
+        
+        loss_params.append(file.strip('\n'))
+        
+    except:
+        check.append(file.strip('\n'))
     
-    else:
-        with open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/check_cases.txt', 'a') as f:
-            parameters = file[i].split("put_")[-1].strip(".txt\n").split("_")
-            f.write("_".join(parameters))
-            f.write('\n')
-        i += 1
+with open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/check_cases.txt', 'w') as f:
+    f.write('\n'.join(check))
+
 d = pd.DataFrame(validation_loss_total, columns = ['Val_loss_total'])
 d['Val_loss_recon'] = validation_loss_recon
 d['Val_loss_kl'] = validation_loss_kl
@@ -62,22 +93,19 @@ d['Train_loss_kl'] = train_loss_kl
 d['Test_loss_total'] = test_loss_total
 d['Test_loss_recon'] = test_loss_recon
 d['Test_loss_kl'] = test_loss_kl
-d['Valid_molecules'] = valid
-d['Alpha'] = alpha
 d['Difference'] = np.abs(d['Train_loss_total'] - d['Val_loss_total'])
 d['Parameters'] = loss_params
-print(d)
-d = d.sort_values(['Valid_molecules'], ascending = False)
+d = d.sort_values(['Val_loss_total', "Difference", "Val_loss_recon"])
+d.to_csv('summary_results.csv', header=True, index=False)
 
 best_parameters = d.head(20)
-# best_parameters.to_csv("/hps/research1/icortes/acunha/python_scripts/single_cell/best_parameters_pancancer_losses.txt")
+# best_parameters.to_csv("/hps/research1/icortes/acunha/python_scripts/Molecular_vae//best_parameters_pancancer_losses.txt")
 # best_parameters = best_parameters.sort_values('Difference')
 print(best_parameters.head(20))
 print(list(best_parameters['Parameters'].head(20)))
-
-with open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/list_best_parameters.txt', 'w') as f:
-    f.write('{}/{}'.format(list(best_parameters['Alpha'].head(1))[0],
-                           list(best_parameters['Parameters'].head(1))[0].strip('output_')))
+'''
+new_file = "_".join(f.split("_")[-2:])
+with open(/hps/research1/icortes/acunha/python_scripts/Molecular_vae/list_best_parameters_{}.txt'.format(new_file), 'w') as f:
+    f.write(list(best_parameters['Parameters'].head(1))[0])
     f.write('\n')
-    f.write('{}/{}'.format(list(best_parameters['Alpha'].head(1))[0],
-                           list(best_parameters['Parameters'].head(1))[0]))
+    f.write(list(best_parameters['Parameters'].head(1))[0])'''
