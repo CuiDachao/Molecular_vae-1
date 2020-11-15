@@ -171,15 +171,16 @@ class Molecular():
         
         self.train_indexes, self.validation_indexes, self.test_indexes = np.split(shuffle(np.arange(list_indexes.shape[0])), [train_number, validation_number + train_number])
         
-        with open('pickle/Train_indexes.txt', 'w') as f:
-            for i in self.train_indexes:
-                f.write('{}\n'.format(np.char.decode(list_indexes[i]).tolist()))
-        with open('pickle/Validation_indexes.txt', 'w') as f:
-            for i in self.validation_indexes:
-                f.write('{}\n'.format(np.char.decode(list_indexes[i]).tolist()))
-        with open('pickle/Test_indexes.txt', 'w') as f:
-            for i in self.test_indexes:
-                f.write('{}\n'.format(np.char.decode(list_indexes[i]).tolist()))
+        if self.run_type != 'start*':
+            with open('pickle/Train_indexes.txt', 'w') as f:
+                for i in self.train_indexes:
+                    f.write('{}\n'.format(np.char.decode(list_indexes[i]).tolist()))
+            with open('pickle/Validation_indexes.txt', 'w') as f:
+                for i in self.validation_indexes:
+                    f.write('{}\n'.format(np.char.decode(list_indexes[i]).tolist()))
+            with open('pickle/Test_indexes.txt', 'w') as f:
+                for i in self.test_indexes:
+                    f.write('{}\n'.format(np.char.decode(list_indexes[i]).tolist()))
         
         lines = ['\n*Datasets',
              'Training set: {}'.format(len(self.train_indexes)),
@@ -213,7 +214,7 @@ class Molecular():
             if x not in seeds:
                 seeds.append(x)
         
-        if self.run_type == 'start':
+        if 'start' in self.run_type:
             n_epochs_not_getting_better = 0
             best_epoch = None
             results = {'total_loss_values_training' : {},
@@ -585,6 +586,9 @@ def run_molecular(list_parameters, run_type):
 try:
     input_values = sys.argv[1:]
     run_type = input_values[-1]
+    if run_type == 'start*':
+        input_values[5] = '500'
+        input_values[12] = '200'
     run_molecular(input_values, run_type)
 
 except EOFError:

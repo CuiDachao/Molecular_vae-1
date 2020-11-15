@@ -18,12 +18,18 @@ check = []
 validation_loss_total = []
 validation_loss_recon = []
 validation_loss_kl= []
+validation_valid = []
+validation_same = []
 test_loss_total = []
 test_loss_recon = []
 test_loss_kl = []
+test_valid = []
+test_same = []
 train_loss_total = []
 train_loss_recon = []
 train_loss_kl = []
+train_valid = []
+train_same = []
 loss_params = []
 
 
@@ -34,10 +40,10 @@ for file in files:
     values = open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/{}'.format(file.strip('\n')), 'r')
     values = values.readlines()
     try:
-        line_train = values[12].strip('\n').split(' :: ')
-        line_val = values[13].strip('\n').split(' :: ')
-        line_epochs = values[14].strip(' \n').split(': ')
-        line_test = values[16].strip('\n').split(' :: ')
+        line_train = values[16].strip('\n').split(' :: ')
+        line_val = values[17].strip('\n').split(' :: ')
+        line_epochs = values[18].strip(' \n').split(': ')
+        line_test = values[20].strip('\n').split(' :: ')
         
         assert line_train[0] == 'Training'
         line_train = line_train[1].split(' ; ')
@@ -64,6 +70,18 @@ for file in files:
         test_kl_loss = float(line_test[2].split(': ')[1])
         
         
+        assert 'Train_set:' in values[22]
+        train_valid.append(float(values[23].split(': ')[-1].strip('%\n')))
+        train_same.append(float(values[24].split(': ')[-1].strip('\n')))
+        
+        assert 'Validation_set:' in values[26]
+        validation_valid.append(float(values[27].split(': ')[-1].strip('%\n')))
+        validation_same.append(float(values[28].split(': ')[-1].strip('\n')))
+        
+        assert 'Test_set:' in values[30]
+        test_valid.append(float(values[31].split(': ')[-1].strip('%\n')))
+        test_same.append(float(values[32].split(': ')[-1].strip('\n')))
+        
         validation_loss_total.append(val_loss)
         validation_loss_recon.append(val_recon_loss)
         validation_loss_kl.append(val_kl_loss)
@@ -84,18 +102,28 @@ for file in files:
 with open('/hps/research1/icortes/acunha/python_scripts/Molecular_vae/check_cases.txt', 'w') as f:
     f.write('\n'.join(check))
 
+print(validation_loss_total)
+
 d = pd.DataFrame(validation_loss_total, columns = ['Val_loss_total'])
 d['Val_loss_recon'] = validation_loss_recon
 d['Val_loss_kl'] = validation_loss_kl
+d['Val_valid'] = validation_valid
+d['Val_same'] = validation_same
 d['Train_loss_total'] = train_loss_total
 d['Train_loss_recon'] = train_loss_recon
 d['Train_loss_kl'] = train_loss_kl
+d['Train_valid'] = train_valid
+d['Train_same'] = train_same
 d['Test_loss_total'] = test_loss_total
 d['Test_loss_recon'] = test_loss_recon
 d['Test_loss_kl'] = test_loss_kl
+d['Test_valid'] = test_valid
+d['Test_same'] = test_same
 d['Difference'] = np.abs(d['Train_loss_total'] - d['Val_loss_total'])
 d['Parameters'] = loss_params
-d = d.sort_values(['Val_loss_total', "Difference", "Val_loss_recon"])
+# d = d.sort_values(['Val_loss_total'])
+d = d.sort_values(['Val_valid', 'Val_same'], ascending = False)
+print(d.shape)
 d.to_csv('summary_results.csv', header=True, index=False)
 
 best_parameters = d.head(20)

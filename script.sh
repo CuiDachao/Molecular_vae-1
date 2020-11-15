@@ -1,17 +1,17 @@
 #!/bin/bash
 job_group="smiles_VAE"
-bgmod -L 60 /$job_group
+bgmod -L 20 /$job_group
 
 run_type="start"
-for alpha in "1.0" "0.00005" ; do 
+for alpha in "0.00005" "1.0"  ; do #
     for data_from in "prism_chembl_zinc" ; do # "zinc" ; do 
-        for lr in  "0.0005" "0.0001" "0.00005" "0.00001" ; do # 
-            for n_epoch in "1000" ; do 
+        for lr in "0.00001" "0.0005" "0.0001" "0.00005" ; do # 
+            for n_epoch in "1000" ; do  # 
                 for epoch_reset in "250" ; do
                     for gam in "0.6" ; do
-                        for dropout in "0.0" "0.1" "0.3" "0.5" ; do
-                            for type_lr in "cyclical" "non_cyclical" ; do
-                                for run_percentage in "0.5" ; do # "0.1" "0.25" "0.50" ; do
+                        for dropout in "0.5" "0.0" "0.1" "0.3" ; do #  
+                            for type_lr in "non_cyclical" "cyclical" ; do #
+                                for run_percentage in "0.1" "0.25" "0.50" ; do #
                                     max_l="120"
                                     size_batch="64"
                                     step="50"

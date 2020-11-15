@@ -1,3 +1,5 @@
+best_model/
+stopped_early.txt
 check_cases.txt
 check_valid/
 list_best_parameters.txt
