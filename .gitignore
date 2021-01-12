@@ -1,3 +1,5 @@
+validate_results/
+*convert*
 best_model/
 stopped_early.txt
 check_cases.txt
