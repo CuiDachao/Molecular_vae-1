@@ -1,347 +1,129 @@
-# -------------------------------------------------- IMPORTS --------------------------
-------------------------
+# -------------------------------------------------- IMPORTS --------------------------------------------------
 
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.optim import lr_scheduler
-import copy
 import pandas as pd
 import pickle
-import time
-from sklearn.utils import shuffle
 import matplotlib.pyplot as plt
 import torch.utils.data
-import sys
-import gc
+import h5py
 from rdkit import Chem
+import random
+import seaborn as sns
 
-from full_network import VAE_molecular
+from VAE_NN import Molecular_VAE
 from featurizer_SMILES import OneHotFeaturizer
 
-# -------------------------------------------------- DEFINE SEEDS ---------------------
------------------------------
+# -------------------------------------------------- ANOTHER FUNCTIONS --------------------------------------------------
 
-seed = 42
-np.random.seed(seed)
-torch.manual_seed(seed)
+def set_seed(value):
+    global seed
+    np.random.seed(value)
+    torch.manual_seed(value)
 
-# -------------------------------------------------- ANOTHER FUNCTIONS ----------------
-----------------------------------
+# -------------------------------------------------- DEFINE SEEDS --------------------------------------------------
 
-def create_report(filename, list_comments):
-    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/{}'.format
-(filename), 'a') as f:
-        f.write('\n'.join(list_comments))
-
-# --------------------------------------------------
-        
-def check_valid_smiles(data, maximum_length):
-    found_invalid = False
-    valid_smiles = []
-    for i in range(len(data)):
-        m = data[i]
-        if len(m) <= maximum_length and m not in valid_smiles:
-            valid_smiles.append(m)
-        else:
-            with open('invalid_smiles.txt', 'a') as f:
-                f.write(data[i])
-                f.write('\n')
-
-    if found_invalid:
-        print('WARNING!! \nSome molecules have invalid lengths and will not be considered. Please check the file invalid_smiles.txt for more information. \n')
-
-    return valid_smiles
+initial_seed = 42
+set_seed(initial_seed)
 
 # -------------------------------------------------- MOLECULAR --------------------------------------------------
-class Molecular():
-    def __init__(self):
-        self.alpha = None
-        self.size_input = None
-        self.maximum_length = None
-        self.size_batch = None
-        self.dropout = None
-        self.seed = None
 
-        self.device = None
-        
-        self.filename_report = None
+path_model = '/hps/research1/icortes/acunha/python_scripts/Molecular_vae/best_model'
+# path_model = '/Users/acunha/Desktop/Molecular_VAE'
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+_, _, maximum_length_m, _, _, _, _, _, dropout_m, _, _, _, _, _, _ = pickle.load(open('{}/list_initial_parameters_smiles.pkl'.format(path_model), 'rb'))
+dropout_m = float(dropout_m)
+maximum_length_m = int(maximum_length_m)
+ohf = OneHotFeaturizer()
 
-    # --------------------------------------------------
+molecular_model = Molecular_VAE(number_channels_in=maximum_length_m, length_signal_in=len(ohf.get_charset()), dropout_prob=dropout_m)
+molecular_model.load_state_dict(torch.load('{}/molecular_model.pt'.format(path_model), map_location=device))
+molecular_model.to(device)
 
-    def __set_parameters(self, list_parameters):
-        self.alpha = float(list_parameters[0])
-        self.maximum_length = int(list_parameters[1])
-        self.size_batch = int(list_parameters[3])
-        self.dropout = float(list_parameters[7])
-        self.seed = int(list_parameters[10])
-        self.ohf = OneHotFeaturizer()
 
-    # --------------------------------------------------
+# path_dataset = path_model
+path_dataset = '/hps/research1/icortes/acunha/python_scripts/Molecular_vae/data/PRISM_ChEMBL_ZINC/'
+dataset = h5py.File('{}/prism_chembl250_chembldrugs_zinc250.hdf5'.format(path_dataset), 'r')
 
-    def __load_initial_parameters(self):
-        list_parameters = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/trained_models/molecular/list_initial_parameters_molecular.pkl', 'rb'))
-        self.__set_parameters(list_parameters)
-        self.device = list_parameters[-1]
+# path_results = path_dataset
+path_results = '/hps/research1/icortes/acunha/python_scripts/Molecular_vae/final_results'
+test_set_indexes = open('{}/Test_indexes.txt'.format(path_results), 'r')
+test_set_indexes = test_set_indexes.readlines()
+test_set_indexes = [x.strip('\n') for x in test_set_indexes]
+print(len(test_set_indexes))
 
-        lines = ['** REPORT - MOLECULAR **\n',
-                '* Parameters',
-                'Alpha (1.0 is without alpha): {}'.format(self.alpha),
-                'Maximum length os smiles: {}'.format(self.maximum_length),
-                'Size batch: {} ; Dropout: {} ; Seed: {} '.format(self.size_batch, self.dropout, self.seed),
-                '\n*About the network',
-                'Runs on: {}'.format(self.device),
-                '\n']
+seeds = [initial_seed]
+new_dataset = {}
+results = {}
+list_number_epochs = [1, 50, 100, 500]
+number_epochs = list_number_epochs[-1]
+while len(seeds) < number_epochs:
+    x = random.randint(0, 100000)
+    if x not in seeds:
+        seeds.append(x)
+for i in range(len(test_set_indexes)):
+    index = test_set_indexes[i]
+    position = np.where(np.char.decode(dataset['index']) == index)[0][0]
+    smile = np.char.decode(dataset['smiles'][position]).tolist()
+    j = 1
+    found_valid = False
+    found_same = False
+    valid = -1
+    same = -1
+    input_tensor = torch.Tensor([np.array(dataset['one_hot_matrices'][position])]).type('torch.FloatTensor').to(device)
+    z_mu, z_var = molecular_model.encoder(input_tensor)
+    while j <= number_epochs or found_same:
+        print(j)
+        set_seed(seeds[j-1])
+        std = torch.exp(z_var/2)
+        eps = torch.randn_like(std) * 1e-2
+        x_sample = eps.mul(std).add_(z_mu)
+        output = molecular_model.decoder(x_sample)
+        smile_output = ohf.back_to_smile(output)
+        print(smile_output)
+        m = Chem.MolFromSmiles(smile_output)
+        if m is not None and not found_valid:
+            valid = j
+            found_valid = True
+        if smile == smile_output:
+            same = j
+            found_same = True
+        j += 1
 
-        create_report(self.filename_report, lines)
+    new_dataset[index] = {'Number_for_valid':valid, 'Number_for_identical':same}
 
-        global seed
-        if seed != self.seed:
-            seed = self.seed
-            np.random.seed(self.seed)
-            torch.manual_seed(self.seed)
+new_dataset = pd.DataFrame.from_dict(new_dataset, orient='index')
+new_dataset.to_csv('{}/Results_epoch{}.csv'.format(path_results, number_epochs), header=True, index=True)
 
-    # --------------------------------------------------
+number_per_epochs = {}
+number_per_epochs['>{}'.format(number_epochs)] = {'Valid':new_dataset.loc[new_dataset['Number_for_valid'] == -1].shape[0],
+                                                  'Identical':new_dataset.loc[new_dataset['Number_for_identical'] == -1].shape[0]}
+for epoch in range(1, number_epochs+1):
+    number_per_epochs[str(epoch)] = {
+        'Valid': new_dataset.loc[new_dataset['Number_for_valid'] == epoch].shape[0],
+        'Identical': new_dataset.loc[new_dataset['Number_for_identical'] == epoch].shape[0]}
 
-    def __initialize_model(self, n_rows, n_columns):
-        model = VAE_molecular(number_channels_in=int(n_rows),
-                              length_signal_in=int(n_columns), dropout_prob=self.dropout)
-        model.to(self.device)
+number_per_epochs = pd.DataFrame.from_dict(number_per_epochs, orient='index').rename_axis('Epochs')
+subset = number_per_epochs.reset_index()
+subset = pd.melt(subset, id_vars = "Epochs")
+subset.sort_values(by=['Epochs'], inplace=True)
+print(subset)
 
-        return model
+my_palette = ["#17202a", "#641e16", "#012f11"]
+sns.set_palette(my_palette)
+sns.set_style(style='white')
 
-    # --------------------------------------------------
+sns.catplot(x='Epochs', y='value', hue='variable', data=subset, kind = 'bar')._legend.remove()
+plt.ylabel('Number of cases')
+plt.legend()
+plt.savefig('{}/Number_molecules_per_epoch.png'.format(path_results), dpi=200, bbox_inches='tight')
+plt.show()
 
-    def __loss_function(self, x_input, x_output, z_mu, z_var):
-        reconstruction_loss = F.binary_cross_entropy(x_output, x_input, size_average=False)
-        kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu.pow(2) - 1.0 - z_var)
-        return reconstruction_loss + (self.alpha * kl_loss), reconstruction_loss, kl_loss
-
-    # --------------------------------------------------
-
-    def __load_model(self, model):
-        model_parameters = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/trained_models/molecular/molecular_model.pkl', 'rb'))
-        model.load_state_dict(model_parameters)
-        return model
-    
-    # --------------------------------------------------
-
-    def start_molecular(self):
-        self.__load_initial_parameters()
-        model = self.__initialize_model(n_rows=self.maximum_length, n_columns=len(self.ohf.get_charset()))
-        model = self.__load_model(model)
-        return model
-    
-    # --------------------------------------------------
-
-    def run_dataset(self, model_trained, dataset):
-        dataset_torch = torch.tensor(dataset).type('torch.FloatTensor')
-        data_loader = torch.utils.data.DataLoader(dataset_torch, batch_size=self.size_batch, shuffle=False)
-        
-        del dataset_torch
-        gc.collect()
-        
-        total_loss = 0.0
-        reconstruction_loss = 0.0
-        kl_loss = 0.0
-        predictions_complete, bottleneck_complete = [], []
-        model_trained.eval()
-        with torch.no_grad():
-            for data_batch in data_loader:
-                data_batch = data_batch.to(self.device)
-                data_predictions = model_trained(data_batch)  # output predicted by the model
-                current_loss = self.__loss_function(data_batch, data_predictions[0], data_predictions[2], data_predictions[3])
-                total_loss += current_loss[0].item()
-                reconstruction_loss += current_loss[1].item()
-                kl_loss += current_loss[2].item()
-                predictions_complete.extend(list(data_predictions[0].cpu().numpy()))
-                bottleneck_complete.extend(list(data_predictions[1].cpu().numpy()))
-
-        total_loss = total_loss / len(data_loader)
-        reconstruction_loss = reconstruction_loss / len(data_loader)
-        kl_loss = kl_loss / len(data_loader)
-
-        free_memory = [data_loader, data_predictions]
-        for item in free_memory:
-            del item
-        gc.collect()
-
-        valid = 0
-        invalid_id = []
-        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/run_once/valid_smiles.txt', 'a') as f:
-            smiles_i = self.ohf.back_to_smile(list(dataset))
-            smiles_o = self.ohf.back_to_smile(list(predictions_complete))
-            for i in range(len(smiles_i)):
-                m = Chem.MolFromSmiles(smiles_o[i])
-                if m is not None:
-                    valid += 1
-                else:
-                    invalid_id.append(i)
-                f.write('\n'.join(['Input: {}'.format(smiles_i[i]), 'Output: {}'.format(smiles_o[i]), '\n']))
-                f.write('\n')
-        
-        lines = ['* RUN JUST ONCE *',
-                'Number of smiles: {} '.format(len(dataset)),
-                'Total loss: {:.2f} ; Reconstruction loss: {:.2f} ; KL loss: {:.2f}'.format(total_loss, reconstruction_loss, kl_loss),
-                'Valid molecules: {:.2f}%'.format(float((valid / len(smiles_o)) * 100)),
-                '\n']
-        create_report(self.filename_report, lines)
-        
-        return predictions_complete, bottleneck_complete, invalid_id
-    
-    # --------------------------------------------------
-    def run_only_valids(self, model_trained, dataset, times, list_indexes):
-        dataset_torch = torch.tensor(dataset).type('torch.FloatTensor')
-        data_loader = torch.utils.data.DataLoader(dataset_torch, batch_size=1, shuffle=False)
-        
-        del dataset_torch
-        gc.collect()
-        
-        total_loss = 0.0
-        reconstruction_loss = 0.0
-        kl_loss = 0.0
-        predictions_complete, bottleneck_complete = [], []
-        model_trained.eval()
-        with torch.no_grad():
-            number_valid = 0
-            valid_id = []
-            for i, data_batch in enumerate(data_loader):
-                data_batch = data_batch.to(self.device)
-                valid = False
-                z_mu, z_var = model_trained.encoder(data_batch)
-                correct_seed = copy.copy(self.seed)
-                
-                j = 0
-                while j < times and not valid:
-                    std = torch.exp(z_var/2)
-                    eps = torch.randn_like(std) * 1e-2
-                    x_sample = eps.mul(std).add_(z_mu)
-                    data_predictions = model_trained.decoder(x_sample)  # output predicted by the model
-                    smile_o = self.ohf.back_to_smile(list(data_predictions))
-                    
-                    try:
-                        m = Chem.MolFromSmiles(smile_o[0])
-                        if m is not None:
-                            valid = True
-                            with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/run_{}/Results_valid.txt'.format(times), 'a') as f:
-                                lines = ['Smile: {}'.format(self.ohf.back_to_smile(list(data_batch))),
-                                         'Index: {}'.format(list_indexes[i]),
-                                         'Found valid smile after {} iterations'.format(j+1),
-                                         '\n']
-                                f.write('\n'.join(lines))
-                            number_valid += 1
-                    except:
-                        pass
-                    
-                    self.seed = np.random.random_integers(0, 10000)
-                    j += 1
-                
-                self.seed = correct_seed
-                
-                current_loss = self.__loss_function(data_batch, data_predictions, z_mu, z_var)
-                total_loss += current_loss[0].item()
-                reconstruction_loss += current_loss[1].item()
-                kl_loss += current_loss[2].item()
-                predictions_complete.extend(data_predictions.cpu().numpy())
-                bottleneck_complete.extend(x_sample.cpu().numpy())
-                if valid:
-                    valid_id.append(list_indexes[i])
-                else:
-                    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/run_{}/Results_not_valid.txt'.format(times), 'a') as f:
-                        lines = ['Smile: {}'.format(self.ohf.back_to_smile(list(data_batch))),
-                                 'Index: {}'.format(list_indexes[i]),
-                                 '\n']
-                        f.write('\n'.join(lines))
-                
-        print(number_valid)
-        total_loss = total_loss / len(data_loader)
-        reconstruction_loss = reconstruction_loss / len(data_loader)
-        kl_loss = kl_loss / len(data_loader)
-
-        free_memory = [data_loader, data_predictions]
-        for item in free_memory:
-            del item
-        gc.collect()
-        
-        lines = ['* GET ONLY VALIDS *',
-                'Number of smiles: {} '.format(len(dataset)),
-                'Total loss: {:.2f} ; Reconstruction loss: {:.2f} ; KL loss: {:.2f}'.format(total_loss, reconstruction_loss, kl_loss),
-                'Number of valid molecules: {} ({:.2f}%)'.format(number_valid, float((number_valid / len(dataset)) * 100)),
-                '\n']
-        create_report(self.filename_report, lines)
-        
-        return predictions_complete, bottleneck_complete, valid_id
-    
-    # --------------------------------------------------
-    
-    def run_new_latent_space(self, model_trained, dataset, times):
-        dataset_torch = torch.tensor(dataset).type('torch.FloatTensor')
-        data_loader = torch.utils.data.DataLoader(dataset_torch, batch_size=1, shuffle=False)
-        
-        del dataset_torch
-        gc.collect()
-        
-        total_loss = 0.0
-        reconstruction_loss = 0.0
-        kl_loss = 0.0
-        predictions_complete, bottleneck_complete = [], []
-        model_trained.eval()
-        with torch.no_grad():
-            number_valid = 0
-            for data_batch in data_loader:
-                data_batch = data_batch.to(self.device)
-                valid = False
-                z_mu, z_var = model_trained.encoder(data_batch)
-                correct_seed = copy.copy(self.seed)
-                
-                j = 0
-                while j < times and not valid:
-                    std = torch.exp(z_var/2)
-                    eps = torch.randn_like(std) * 1e-2
-                    x_sample = eps.mul(std).add_(z_mu)
-                    data_predictions = model_trained.decoder(x_sample)  # output predicted by the model
-                    smile_o = self.ohf.back_to_smile(list(data_predictions))
-                    
-                    try:
-                        m = Chem.MolFromSmiles(smile_o[0])
-                        if m is not None:
-                            valid = True
-                            number_valid += 1
-                    except:
-                        pass
-                    
-                    self.seed = np.random.random_integers(0, 10000)
-                    j += 1
-                
-                self.seed = correct_seed
-                
-                if valid:
-                    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/10times/Results_valid.txt', 'a') as f:
-                        lines = ['Smile: {}'.format(self.ohf.back_to_smile(list(data_batch))),
-                                 'Found valid smile after {} iterations'.format(j+1),
-                                 'Output: {}'.format(smile_o),
-                                 '\n']
-                        f.write('\n'.join(lines))
-                else:
-                    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/10times/Results_not_valid.txt', 'a') as f:
-                        lines = ['Smile: {}'.format(self.ohf.back_to_smile(list(data_batch))),
-                                 '\n']
-                        f.write('\n'.join(lines))
-                
-
-        free_memory = [data_loader, data_predictions]
-        for item in free_memory:
-            del item
-        gc.collect()
-    
-    # --------------------------------------------------
-
-    def get_maximum_length(self):
-        return self.maximum_length
-    
-    # --------------------------------------------------
-    
-    def set_filename_report(self, filename):
-        self.filename_report = filename
+results = {}
+for number in list_number_epochs:
+    indexes = [x for x in range(1, number+1)]
+    subset = number_per_epochs.loc[number_per_epochs.index.isin(indexes)]
+    results['With {} epochs'.format(number)] = {'Valid':subset['Valid'].sum(),
+                                                'Identical':subset['Identical'].sum(),
+                                                'Not found':new_dataset.shape[0] - subset['Valid'].sum()}
+results = pd.DataFrame.from_dict(results, orient='index')
+print(results)
