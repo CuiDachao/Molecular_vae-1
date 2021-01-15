@@ -78,7 +78,7 @@ for i in range(len(test_set_indexes)):
         eps = torch.randn_like(std) * 1e-2
         x_sample = eps.mul(std).add_(z_mu)
         output = molecular_model.decoder(x_sample)
-        smile_output = ohf.back_to_smile(output)
+        smile_output = ohf.back_to_smile(output)[0]
         print(smile_output)
         m = Chem.MolFromSmiles(smile_output)
         if m is not None and not found_valid:
