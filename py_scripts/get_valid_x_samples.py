@@ -56,7 +56,7 @@ new_dataset = {}
 results = {}
 list_number_epochs = [1, 50, 100, 500]
 number_epochs = list_number_epochs[-1]
-while len(seeds) < number_epochs:
+while len(seeds) <= number_epochs:
     x = random.randint(0, 100000)
     if x not in seeds:
         seeds.append(x)
@@ -71,7 +71,7 @@ for i in range(len(test_set_indexes)):
     same = -1
     input_tensor = torch.Tensor([np.array(dataset['one_hot_matrices'][position])]).type('torch.FloatTensor').to(device)
     z_mu, z_var = molecular_model.encoder(input_tensor)
-    while j <= number_epochs or found_same:
+    while j <= number_epochs and not found_same:
         print(j)
         set_seed(seeds[j-1])
         std = torch.exp(z_var/2)
@@ -92,7 +92,7 @@ for i in range(len(test_set_indexes)):
     new_dataset[index] = {'Number_for_valid':valid, 'Number_for_identical':same}
 
 new_dataset = pd.DataFrame.from_dict(new_dataset, orient='index')
-new_dataset.to_csv('{}/Results_epoch{}.csv'.format(path_results, number_epochs), header=True, index=True)
+new_dataset.to_csv('{}/Results_epoch{}2.csv'.format(path_results, number_epochs), header=True, index=True)
 
 number_per_epochs = {}
 number_per_epochs['>{}'.format(number_epochs)] = {'Valid':new_dataset.loc[new_dataset['Number_for_valid'] == -1].shape[0],
@@ -115,7 +115,7 @@ sns.set_style(style='white')
 sns.catplot(x='Epochs', y='value', hue='variable', data=subset, kind = 'bar')._legend.remove()
 plt.ylabel('Number of cases')
 plt.legend()
-plt.savefig('{}/Number_molecules_per_epoch.png'.format(path_results), dpi=200, bbox_inches='tight')
+plt.savefig('{}/Number_molecules_per_epoch2.png'.format(path_results), dpi=200, bbox_inches='tight')
 plt.show()
 
 results = {}

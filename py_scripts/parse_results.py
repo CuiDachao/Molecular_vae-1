@@ -7,7 +7,8 @@ seed = 42
 np.random.seed(seed)
 
 #-------------------------------------------------WHOLE-------------------------------------------------
-file = open("/hps/research1/icortes/acunha/python_scripts/Molecular_vae/loss_results.txt","r")
+# file = open("/hps/research1/icortes/acunha/python_scripts/Molecular_vae/loss_results.txt","r")
+# file = open("/hps/research1/icortes/acunha/python_scripts/Molecular_vae/loss_results_old.txt","r")
 import pandas as pd
 import numpy as np
 
@@ -33,7 +34,7 @@ train_same = []
 loss_params = []
 
 
-files = open('loss_results.txt', 'r')
+files = open('loss_results_old.txt', 'r')
 files = files.readlines()
 
 for file in files:
@@ -70,7 +71,7 @@ for file in files:
         test_kl_loss = float(line_test[2].split(': ')[1])
         
         
-        assert 'Train_set:' in values[22]
+        '''assert 'Train_set:' in values[22]
         train_valid.append(float(values[23].split(': ')[-1].strip('%\n')))
         train_same.append(float(values[24].split(': ')[-1].strip('\n')))
         
@@ -80,7 +81,10 @@ for file in files:
         
         assert 'Test_set:' in values[30]
         test_valid.append(float(values[31].split(': ')[-1].strip('%\n')))
-        test_same.append(float(values[32].split(': ')[-1].strip('\n')))
+        test_same.append(float(values[32].split(': ')[-1].strip('\n')))'''
+        
+        assert 'Valid' in values[21]
+        test_valid.append(float(values[21].split(': ')[-1].strip('%\n')))
         
         validation_loss_total.append(val_loss)
         validation_loss_recon.append(val_recon_loss)
@@ -107,30 +111,31 @@ print(validation_loss_total)
 d = pd.DataFrame(validation_loss_total, columns = ['Val_loss_total'])
 d['Val_loss_recon'] = validation_loss_recon
 d['Val_loss_kl'] = validation_loss_kl
-d['Val_valid'] = validation_valid
-d['Val_same'] = validation_same
+# d['Val_valid'] = validation_valid
+# d['Val_same'] = validation_same
 d['Train_loss_total'] = train_loss_total
 d['Train_loss_recon'] = train_loss_recon
 d['Train_loss_kl'] = train_loss_kl
-d['Train_valid'] = train_valid
-d['Train_same'] = train_same
+# d['Train_valid'] = train_valid
+# d['Train_same'] = train_same
 d['Test_loss_total'] = test_loss_total
 d['Test_loss_recon'] = test_loss_recon
 d['Test_loss_kl'] = test_loss_kl
-d['Test_valid'] = test_valid
-d['Test_same'] = test_same
+# d['Test_valid'] = test_valid
+# d['Test_same'] = test_same
+d['Valid'] = test_valid
 d['Difference'] = np.abs(d['Train_loss_total'] - d['Val_loss_total'])
 d['Parameters'] = loss_params
 # d = d.sort_values(['Val_loss_total'])
-d = d.sort_values(['Val_valid', 'Val_same'], ascending = False)
+d = d.sort_values(['Valid'], ascending = False)
 print(d.shape)
-d.to_csv('summary_results.csv', header=True, index=False)
+d.to_csv('summary_results_old.csv', header=True, index=False)
 
 best_parameters = d.head(20)
 # best_parameters.to_csv("/hps/research1/icortes/acunha/python_scripts/Molecular_vae//best_parameters_pancancer_losses.txt")
 # best_parameters = best_parameters.sort_values('Difference')
 print(best_parameters.head(20))
-print(list(best_parameters['Parameters'].head(20)))
+print('\n'.join(list(best_parameters['Parameters'].head(20))))
 '''
 new_file = "_".join(f.split("_")[-2:])
 with open(/hps/research1/icortes/acunha/python_scripts/Molecular_vae/list_best_parameters_{}.txt'.format(new_file), 'w') as f:

@@ -15,4 +15,8 @@ data/
 hd
 py_scripts/__pycache__/
 old_results_do_not_delete/
-summary_results.csv
+best_model_old/
+*.log
+final_results/
+loss_results_old.txt
+summary_results*.csv
